@@ -1,0 +1,371 @@
+---
+title: "Słodycze"
+author: Klaudia Grabowska i Gabriela Kuczyńska
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+
+library(tidyverse)
+library(fivethirtyeight)
+```
+
+# Wprowadzenie
+
+Celem projektu jest eksploracja danych dotyczących najlepszych słodyczy.
+
+## Obróbka danych
+
+Dane wczytano bezpośrednio z pakietu fivethirtyeight. 
+
+```{r}
+candy <- candy_rankings
+```
+
+Składają się z `r nrow(candy)` rekordów i `r ncol(candy)` zmiennych.
+
+## Wykorzystane zmienne
+
+W dalszej analizie wykorzystano następujące zmienne:  
+
+| Zmienna             | Opis          
+| --------------------|:-------------------------------------------
+| *chocolate*         | Czy zawiera czekoladę? (0 - nie, 1 - tak)
+| *fruity*            | Czy ma owocowy smak? (0 - nie, 1 - tak)
+| *caramel*           | Czy zawiera karmel? (0 - nie, 1 - tak)
+| *peanutalmondy*     | Czy zawiera orzechy? (0 - nie, 1 - tak)
+| *nougat*            | Czy zawiera nugat? (0 - nie, 1 - tak)
+| *crispedricewafer*  | Czy jest chrupiące? (0 - nie, 1 - tak)
+| *pluribus*          | Czy to jeden z wielu słodyczy w torbie lub pudełku? (0 - nie, 1 - tak)
+| *bar*               | Czy to batonik? (0 - nie, 1 - tak)
+| *competitorname*    | Nazwa słodycza
+| *sugarpercent*      | Procentowa zawartość cukru
+| *pricepercent*      | Procent ceny jednostkowej w porównaniu do reszty
+| *winpercent*        | Całkowity procent wygranych po 269.000 parowaniach
+| *hard*              | Czy jest twardy? (0 - nie, 1 - tak)
+
+Statystyki podsumowujące wybrane zmienne przedstawiają się następująco:
+
+```{r warning=FALSE}
+# zamiana niektórych zmiennych na faktory
+candy$chocolate <- factor(candy$chocolate, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$fruity <- factor(candy$fruity, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$caramel <-factor(candy$caramel, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$peanutyalmondy <-factor(candy$peanutyalmondy, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$nougat <-factor(candy$nougat, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$peanutyalmondy <-factor(candy$peanutyalmondy, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$crispedricewafer <- factor(candy$crispedricewafer, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$hard <-factor(candy$hard, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$bar <-factor(candy$bar, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$pluribus <-factor(candy$pluribus, levels = c("TRUE","FALSE"), labels= c(1,0))
+candy$competitorname <- factor(candy$competitorname)
+candy_rankingsnew <- candy_rankings %>%
+  pivot_longer(-c(competitorname, sugarpercent, pricepercent, winpercent,bar,hard,pluribus), 
+               names_to = "element", values_to = "contain") %>%
+  mutate(contain = as.logical(contain)) %>%
+  arrange(element)
+
+candy_rankingspak <- candy_rankings %>%
+  pivot_longer(-c(competitorname, sugarpercent, pricepercent, winpercent,chocolate, fruity, caramel, peanutyalmondy, nougat, crispedricewafer, hard), 
+               names_to = "opakowanie", values_to = "tak.nie") %>%
+  mutate(tak.nie = as.logical(tak.nie)) %>%
+  arrange(opakowanie)
+
+knitr::kable(candy_rankingsnew %>% 
+  filter(contain=="TRUE") %>% 
+  group_by(element) %>% 
+  summarise(ilość=n()) %>% 
+  select(element, ilość))
+```
+Z powyższej tabeli można odczytać m.in., że słodycze najczęściej mają owocowy smak lub zawieraja czekoladę.Natomiast nugat, ryż preparowany itp. są rzadko używane.
+
+Zmienne, które nie zostały tutaj uwzględnione, będą podsumowane w dalszej części analizy.
+
+# Analiza
+
+Przeprowadzona analiza obejmowała następujące zagadnienia:
+
+* analizę procentowej zawartości cukru w słodyczach dla czekolady i dla karmelu
+* analizę ceny w zależności od użytego składnika i opakowania
+* analizę procentowej ilości zwycięstw w zależności od składu, opakowania, twardości słodyczy
+
+
+## Analiza procentowej zawartości cukru
+
+### Czekolada
+
+```{r}
+candy %>% 
+  group_by(chocolate) %>% 
+  ggplot(aes(chocolate,sugarpercent, fill=chocolate))+
+  geom_boxplot()+ 
+  scale_fill_manual(values = c("lightsalmon4", "moccasin"), name= "Czekolada?")+
+  ggtitle("Średnia procentowa zawartość cukru w słodyczach zawierających czekoladę")+
+  ylab("")+
+  xlab("") + theme_bw()
+
+```
+```{r}
+#### Hipoteza badawcza: Średnia wartość zmiennej sugarpercent nie zależy od tego czy słodycz zawiera czekoladę czy nie.
+#H0: wartość średnia zmiennej sugarpercent, jeśli słodycz nie zawiera czekolady jest równa wartości średniej sugarpercent jeśli czekolada jest oznaczona liczbą 0.
+#H1: wartość średnia zmiennej sugarpercent, jeśli słodycz nie zawiera czekolady nie jest równa wartości średniej sugarpercent jeśli czekolada jest oznaczona liczbą 0.
+
+#### średnia zawartość cukru w słodyczach niezawierających czekoladę
+candy.choco0 <- candy$sugarpercent[candy$chocolate==0]
+#### średnia zawartość cukru w słodyczach zawierających czekoladę
+candy.choco1 <- candy$sugarpercent[candy$chocolate==1]
+t.test(candy.choco0,candy.choco1)
+# test t wykazał że satystyka t= 0.98564 df(stopnie swobody)=82.99
+# p-value = 0.3272 > 0,05 - nie ma podstaw do odrzucenia hipotezy H0
+#nie ma istotnej różnicy w tych średnich
+
+```
+
+
+Test oraz wykres wykazały, że zawartość czekolady w słodyczach nie wpływa znacząco na średnią zawartość cukru w produktach.
+
+### Karmel
+```{r}
+candy %>% 
+  group_by(caramel) %>% 
+  ggplot(aes(caramel,sugarpercent, fill=caramel))+
+  geom_boxplot()+ 
+  scale_fill_manual(values = c("chocolate3", "moccasin"), name= "Karmel?")+
+  ggtitle("Średnia procentowa zawartość cukru w słodyczach zawierających karmel")+
+  ylab("")+
+  xlab("") + theme_bw()
+
+
+```
+
+```{r}
+#### Hipoteza badawcza: Średnia wartość zmiennej sugarpercent nie zależy od tego czy słodycz zawiera karmel czy nie.
+#H0: wartość średnia zmiennej sugarpercent, jeśli słodycz nie zawiera karmelu jest równa wartości średniej sugarpercent jeśli karmel jest oznaczony liczbą 0.
+#H1: wartość średnia zmiennej sugarpercent, jeśli słodycz nie zawiera karmelu nie jest równa wartości średniej sugarpercent jeśli karmel jest oznaczony liczbą 0.
+
+#### średnia zawartość cukru w słodyczach niezawierających karmelu
+candy.caramel0 <- candy$sugarpercent[candy$caramel==0]
+#### średnia zawartość cukru w słodyczach zawierających karmelu
+candy.caramel1 <- candy$sugarpercent[candy$caramel==1]
+t.test(candy.caramel0,candy.caramel1)
+# test t wykazał że satystyka t= 2.4292 df(stopnie swobody)=22.108
+# p-value = 0.02371 < 0,05 - należy odrzucić H0 i przyjąć H1
+#(jest istotna roznica w tych średnich)
+
+```
+
+Z kolei w przypadku karmelu widzimy, że ma on już większy wpływ na zawartość cukru w słodyczach.
+
+## Analiza ceny
+
+### Składnik 
+```{r}
+candy_rankingsnew %>% 
+  filter(contain=="TRUE") %>% 
+  group_by(element) %>% 
+  select(element,pricepercent) %>% 
+  ggplot(aes(element,pricepercent, fill=element))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("chocolate3", "lightsalmon4","sandybrown","hotpink2","sienna1","palegreen4"), name= "Składnik")+
+  ylab("")+xlab("")+
+  ggtitle("Średnia procentowa cena słodycza w zależności od użytego składnika")+ theme_bw()
+```
+```{r}
+#H0: wartości średnie zmiennej pricepercent, w grupach wyznaczonych przez kategorie zmiennej element są wszystkie równe.
+#H1: wartości średnie zmiennej pricepercent, w grupach wyznaczonych przez kategorie zmiennej element istnieją przynajmniej dwie kategorie, w których średnie są różne.
+
+price.aov<- aov(candy_rankingsnew$pricepercent[candy_rankingsnew$contain=="TRUE"] ~ candy_rankingsnew$element[candy_rankingsnew$contain=="TRUE"])
+summary(price.aov)
+
+# test t wykazał że satystyka F= 10.81, df(dla międzygrup.)=5, df(dla wewnątrgrup.)=111 
+# p-value = 1.75e-08 < 0,05 - należy odrzucić H0 i przyjąć H1
+#istnieją co najmniej dwie grupy, w których średnia się różni
+
+```
+
+
+Możemy zauważyć, że słodycze zawierające ryż preperowany, wafle itp. są najdroższe. Co jest zaskakujące, ponieważ orzechy są zdecydowanie droższym produktem , a mimo to słodycze, które je zawierają są tańsze. Najtańsze okazały się słodycze o owocowym smaku. Cena produktów zawierających karmel, czekoladę i nugat jest porównywalna.
+
+### Sposób pakowania
+```{r}
+candy_rankingspak %>% 
+  filter(tak.nie=="TRUE") %>% 
+  group_by(opakowanie) %>% 
+  select(opakowanie,pricepercent) %>% 
+  ggplot(aes(opakowanie,pricepercent, fill=opakowanie))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("tan4", "tan"), name= "Opakowanie")+
+  ylab("")+xlab("")+
+  ggtitle("Średnia procentowa cena słodycza w zależności od rodzaju opakowania")+
+  theme_bw()
+```
+
+```{r}
+#### Hipoteza badawcza: Średnia wartość zmiennej pricepercent w zależności od opakowania.
+#H0: mean(x)=mu    
+#H1: mean(x)=/mu
+
+#### średnia procentowa cena w słodyczach w opakowaniu bar
+candy.bar <- candy_rankingspak$pricepercent[candy_rankingspak$opakowanie=="bar"&candy_rankingspak$tak.nie=="TRUE"]
+#### średnia procentowa cena w słodyczach w opakowaniu pluribus
+candy.plur <- candy_rankingspak$pricepercent[candy_rankingspak$opakowanie=="pluribus"&candy_rankingspak$tak.nie=="TRUE"]
+t.test(candy.bar,candy.plur)
+# test t wykazał że satystyka t= 5.5968 df(stopnie swobody)=56.675
+# p-value = 6.609e-07 < 0,05 - należy odrzucić H0 i przyjąć H1
+# średnie istotnie się różnią
+
+```
+
+
+Zdecydowanie droższe okazały się słodycze w batoniku. Za słodycze w paczkach czy pudełkach (czyli takie, które są pakowane po większej ilości sztuk) średnio zapłacimy mniej.
+
+## Analiza zwycięstw
+
+### Ranking
+
+```{r}
+knitr::kable(candy_rankings %>% 
+  select(competitorname, winpercent) %>%
+  arrange(desc(winpercent)) %>% 
+  head(10))
+```
+
+### Pozycja w rankingu a skład 
+
+```{r}
+candy_rankingsnew %>% 
+  filter(contain=="TRUE") %>% 
+  group_by(element) %>% 
+  select(element,winpercent) %>% 
+  ggplot(aes(element,winpercent, fill=element))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("chocolate3", "lightsalmon4","sandybrown","hotpink2","sienna1","palegreen4"), name= "Składnik")+
+  ylab("")+xlab("")+
+  ggtitle("Średnia procentowa wygranych w zależności od użytego składnika")+
+  theme_bw()
+
+```
+
+```{r}
+#H0: wartości średnie zmiennej winpercent, w grupach wyznaczonych przez kategorie zmiennej element są wszystkie równe.
+#H1: wartości średnie zmiennej winpercent, w grupach wyznaczonych przez kategorie zmiennej opakowanie istnieją przynajmniej dwie kategorie, w których średnie są różne.
+
+winel.aov <- aov(candy_rankingsnew$winpercent[candy_rankingsnew$contain=="TRUE"] ~ candy_rankingsnew$element[candy_rankingsnew$contain=="TRUE"])
+summary(winel.aov)
+TukeyHSD(winel.aov)
+
+# test t wykazał że satystyka F= 9.503, df(dla międzygrup.)=5, df(dla wewnątrgrup.)=111
+# p-value = 1.45e-07 < 0,05 - należy odrzucić H0 i przyjąć H1
+#istnieją co najmniej dwie grupy w których średnia się różni
+
+```
+
+
+Okazuje się że, najmniejszą popularnością cieszyły się słodycze o owocowym smaku. Reszta składników plasuje się na podobnym poziomie.
+
+
+
+```{r}
+candy_rankingsnew %>% 
+  filter(winpercent >= 70.73564) %>% 
+  group_by(element) %>% 
+  select(element,competitorname,contain) %>% 
+  ggplot(aes(element,competitorname,col=element, shape=contain))+
+  geom_point(aes(col=element, shape=contain),size = 3)+   
+  ylab("")+xlab("")+
+    ggtitle("Składniki użyte w top 10 słodyczach")+
+  scale_shape_manual(values = c(4,16))+
+  scale_color_manual(values = c("chocolate3", "lightsalmon4","sandybrown","hotpink2","sienna1","palegreen4"), name= "Składnik")+
+ theme_bw()
+```   
+
+Jak widać produkty, które znajdują się najwyżej w rankingu w większości zawierają składniki takie jak czekolada i orzechy, które znajdowały się wysoko w rankingu ogólnym. Żaden z topowych słodyczy nie ma owocowego smaku, który cieszył się najmniejszym powodzeniem i wygrał najmniej bitew.
+
+```{r}
+candy_rankingspak %>% 
+  filter(tak.nie=="TRUE") %>% 
+  group_by(opakowanie) %>% 
+  select(opakowanie,winpercent) %>% 
+  ggplot(aes(opakowanie,winpercent, fill=opakowanie))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("tan4", "tan"), name= "Opakowanie")+
+  ylab("")+xlab("")+
+  ggtitle("Średnia procentowa wygranych w zależności od rodzaju opakowania")+
+  theme_bw()
+``` 
+
+
+```{r}
+#### Hipoteza badawcza: Średnia wartość zmiennej pricepercent w zależności od opakowania.
+#H0: mean(x)=mu    
+#H1: mean(x)=/mu
+
+#### średnia procentowa cena w słodyczach w opakowaniu bar
+win.bar <- candy_rankingspak$winpercent[candy_rankingspak$opakowanie=="bar"&candy_rankingspak$tak.nie=="TRUE"]
+#### średnia procentowa cena w słodyczach w opakowaniu pluribus
+win.plur <- candy_rankingspak$winpercent[candy_rankingspak$opakowanie=="pluribus"&candy_rankingspak$tak.nie=="TRUE"]
+t.test(win.bar,win.plur)
+# test t wykazał że satystyka t= 4.5961 df(stopnie swobody)=46.369
+# p-value = 3.319e-05 < 0,05 - należy odrzucić H0 i przyjąć H1
+# średnie istotnie się różnią
+
+```
+  
+Z wykresu wynika, że wskaźnik zwycięstw słodyczy w batoniku jest wyższy niżeli pojedynczy słodycz z opakowania.
+
+```{r}
+candy %>% 
+  group_by(hard) %>% 
+  ggplot(aes(hard, winpercent, fill=hard))+
+  geom_boxplot()+
+   scale_fill_manual(values = c("seagreen", "darkseagreen3"), name= "Twardy?")+
+  ylab("")+xlab("")+
+  ggtitle("Średnia procentowa wygranych w zależności od twardości słodycza")+
+  theme_bw()
+```
+
+```{r}
+#### Hipoteza badawcza: Średnia wartość zmiennej winpercent nie zależy od tego czy słodycz jest twardy czy nie.
+#H0: wartość średnia zmiennej winpercent, jeśli słodycz nie jest twardy jest równa wartości średniej winpercent jeśli twardość jest oznaczona liczbą 0.
+#H1: wartość średnia zmiennej winpercent, jeśli słodycz nie jest twardy nie jest równa wartości średniej winpercent jeśli twardość jest oznaczona liczbą 0.
+
+#### średnia procentowa ilość zwycięstw cukru w słodyczach nietwardych
+candy.hard0 <- candy$winpercent[candy$hard==0]
+#### średnia procentowa ilość zwycięstw w słodyczach twardych
+candy.hard1 <- candy$winpercent[candy$hard==1]
+t.test(candy.hard0,candy.hard1)
+# test t wykazał że satystyka t= 4.6244 df(stopnie swobody)=45.444
+# p-value =  3.125e-05 < 0,05 - odrzucamy hipotezę H0 i przyjmujemy H1
+# średnie sie isttnie różnią
+
+```
+
+
+Możemy zauważyć, że słodycze, które są miękkie wygrały więcej sparowań. 
+
+# Wnioski
+
+1. Analiza procentowej zawartości cukru w słodyczach wykazała że obecność czekolady w produkcie nie ma znaczącego wpływu na ilość cukru. Z kolei obecność karmelu wpływa znacząco na ilość cukru w słodyczu, co nie jest zaskoczeniem, ponieważ karmel w całości składa się z cukru.
+2. Okazało się, że najtańszymi słodyczami są te, które miały owocowy smak - ciekawym jest też to, że są one najmniej popularnymi produktami i słodycze mające owocpwy smak wygrały najmniej bitew.
+3. Najlepszą Top trójką są: Reese’s Peanut Butter cup, Reese’s Miniatures, Twix.
+4. Większą popularnością cieszą się słodycze w batoniku aniżeli pakowane po wiele sztuk.
+5. Zdecydowanym faworytem okazały się miękkie słodkości.
+
+# Co dalej?
+
+Dalsze analizy mogłyby uwzględnić:
+
+* Kolejne próby zbadania czy dany składnik wpływa na zawartość cukru (u nas uwzględniony tylko: karmel, czekolada).
+* Analizę czy procentowa zawartość cukru wpływa na procentową ilość zwycięstw.
+* Analizę czy procentowa cena słodycza wpływa na procentową ilość zwycięstw.
+
+### Źródła danych i wykorzystane pomoce:
+*https://github.com/fivethirtyeight/data/tree/master/candy-power-ranking
